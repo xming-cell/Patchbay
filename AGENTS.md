@@ -57,7 +57,8 @@
 | `specs/<卡>/log.md` | 这张卡碰了哪些文件、为什么 | 需求讨论 |
 | `docs/plan/file-map.md` | 由 `map.py` 自动生成，别手改 | — |
 | `TROUBLESHOOTING.md` | 现象 → 原因 → 解决，只增不删 | 进度、计划 |
-| `docs/plan/test-plan.md` | 总计划、里程碑、待拍板 | 单卡细节 |
+| `docs/plan/plan.md` | 总计划、里程碑、覆盖矩阵、待拍板；上限 200 行 | 单卡细节 |
+| `docs/plan/frontend-plan.md` | 前端 IA、线框、tokens | 实现细节 |
 
 ## 参考实现
 `backend/src/app/api/health.py`、`backend/tests/test_health.py`、`frontend/src/api/client.ts`。

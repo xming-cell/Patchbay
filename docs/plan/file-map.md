@@ -2,7 +2,7 @@
 
 > 由 `uv run python scripts/map.py` 从各卡的 `specs/<卡>/log.md` 合并生成。
 > 修 bug 的顺序：本表查文件 -> 拿到卡号 -> 读 `specs/<卡>/spec.md`。
-> 覆盖 1 张卡、34 行。
+> 覆盖 1 张卡、35 行。
 
 | 文件 | 卡 | 动作 | 作用 |
 |---|---|---|---|
@@ -21,7 +21,8 @@
 | backend/uv.lock | 001 | 新建 | 依赖锁文件 |
 | docs/plan/decision-log.md | 001 | 新建 | ADR 决策日志 |
 | docs/plan/file-map.md | 001 | 新建 | 由 `map.py` 自动生成的总索引，勿手改 |
-| docs/plan/test-plan.md | 001 | 新建 | 总计划、里程碑、待拍板清单 |
+| docs/plan/frontend-plan.md | 001 | 新建 | 前端 IA / 线框 / tokens 三章 |
+| docs/plan/plan.md | 001 | 新建 | 总计划、里程碑、覆盖矩阵、待拍板（替代 test-plan.md） |
 | frontend/index.html | 001 | 新建 | Vite 入口 HTML |
 | frontend/package.json | 001 | 新建 | 前端依赖与脚本（type-check / lint / vitest） |
 | frontend/src/App.vue | 001 | 新建 | 根组件 |

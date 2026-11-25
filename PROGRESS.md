@@ -11,4 +11,4 @@
 - 无
 
 ## 下一步
-- 开 002；`specs/CURRENT` 现在指向 `001`。总计划见 `docs/plan/test-plan.md`。
+- 开 002。总计划见 `docs/plan/plan.md`；前端三章见 `docs/plan/frontend-plan.md`。

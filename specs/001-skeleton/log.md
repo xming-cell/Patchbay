@@ -17,7 +17,8 @@
 | scripts/guards.py | 新建 | `scope` / `forbidden` / `spec` 三道门禁 |
 | scripts/check.py | 新建 | 一键验收，串起全部检查 |
 | scripts/map.py | 新建 | 合并各卡 `log.md` 生成 `docs/plan/file-map.md`（v2 追加） |
-| docs/plan/test-plan.md | 新建 | 总计划、里程碑、待拍板清单 |
+| docs/plan/plan.md | 新建 | 总计划、里程碑、覆盖矩阵、待拍板（替代 test-plan.md） |
+| docs/plan/frontend-plan.md | 新建 | 前端 IA / 线框 / tokens 三章 |
 | docs/plan/decision-log.md | 新建 | ADR 决策日志 |
 | docs/plan/file-map.md | 新建 | 由 `map.py` 自动生成的总索引，勿手改 |
 | backend/pyproject.toml | 新建 | 后端依赖与 ruff / mypy / pytest 配置 |
