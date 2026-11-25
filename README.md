@@ -27,3 +27,7 @@ uv run python scripts/check.py
 ```
 
 退出码 0 才算完成。规则见 `rules/`，任务卡见 `specs/`，交接状态见 `PROGRESS.md`。
+
+Agent 的读取顺序写在 `AGENTS.md`：`specs/CURRENT` → 该卡 `spec.md` → 该卡 `log.md`
+→ `PROGRESS.md` → 按需读 `rules/`。要查某个功能改了哪些文件，看自动生成的
+`docs/plan/file-map.md`（`uv run python scripts/map.py` 重建）。

@@ -1,11 +1,14 @@
 """硬门禁：把 AGENTS.md 里"零例外"的规则变成可执行断言。
 
-两个检查：
+三个检查：
+  spec       当前任务卡的结构是否完整（spec.md + log.md 齐全、无 tasks.md、文件表非空
+             且路径真实存在）；顺带守住 PROGRESS.md 行数上限与 TROUBLESHOOTING 的格式
   scope      改动是否越出当前任务卡 specs/<CURRENT>/spec.md 的 scope 块
   forbidden  源码里是否有被禁写法（type: ignore / as any / .skip ...）
 
 用法：
   python scripts/guards.py all
+  python scripts/guards.py spec
   python scripts/guards.py scope
   python scripts/guards.py scope --base origin/main
   python scripts/guards.py forbidden
@@ -25,8 +28,12 @@ ROOT = Path(__file__).resolve().parent.parent
 SPECS_DIR = ROOT / "specs"
 CURRENT_POINTER = SPECS_DIR / "CURRENT"
 
-# 任务簿记永远放行，否则每张卡都要重复列一遍
-ALWAYS_ALLOWED: tuple[str, ...] = ("PROGRESS.md", "specs/**")
+# 任务簿记永远放行，否则每张卡都要重复列一遍。
+# file-map.md 是 map.py 每次验收都会重写的产物，同理放行。
+ALWAYS_ALLOWED: tuple[str, ...] = ("PROGRESS.md", "specs/**", "docs/plan/file-map.md")
+
+# PROGRESS.md 只记状态与未决问题；超了就说明它又开始记历史了
+PROGRESS_MAX_LINES = 60
 
 # 只扫这些目录：既覆盖源码，又不会把 .venv / node_modules 扫进来
 SCAN_ROOTS: tuple[str, ...] = ("backend/src", "backend/tests", "frontend/src")
@@ -158,6 +165,131 @@ def current_task_dir() -> Path | None:
     return matches[0]
 
 
+_TABLE_SEPARATOR_CHARS = set("-: ")
+
+
+def parse_table_rows(text: str) -> list[tuple[str, str]]:
+    """取 markdown 表格的数据行 -> [(第一列, 其余列用 | 拼回去)]，表头与分隔行跳过。"""
+    rows: list[tuple[str, str]] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if len(cells) < 2:
+            continue
+        first = cells[0].strip().strip("`").strip()
+        if not first or first == "文件" or set(first) <= _TABLE_SEPARATOR_CHARS:
+            continue
+        rows.append((first, " | ".join(cells[1:])))
+    return rows
+
+
+def file_map_rows(text: str) -> list[tuple[str, str]]:
+    """只取文件表：第一个 `## ` 标题之前的内容，免得把「本卡消耗」的表算成文件。"""
+    head = text.split("\n## ", 1)[0]
+    return parse_table_rows(head)
+
+
+def parse_sections(text: str) -> list[tuple[str, str]]:
+    """按 ### 标题切段 -> [(标题, 正文)]。"""
+    sections: list[tuple[str, list[str]]] = []
+    for line in text.splitlines():
+        if line.startswith("### "):
+            sections.append((line[4:].strip(), []))
+        elif sections:
+            sections[-1][1].append(line)
+    return [(title, "\n".join(body)) for title, body in sections]
+
+
+def check_task_card(task_dir: Path) -> bool:
+    rel = task_dir.relative_to(ROOT).as_posix()
+    ok = True
+    for name in ("spec.md", "log.md"):
+        if not (task_dir / name).is_file():
+            print(f"[FAIL] {rel}/{name} not found", flush=True)
+            ok = False
+    if (task_dir / "tasks.md").is_file():
+        print(f"[FAIL] {rel}/tasks.md is retired; merge it into spec.md", flush=True)
+        ok = False
+
+    log_file = task_dir / "log.md"
+    if not log_file.is_file():
+        return ok
+
+    rows = file_map_rows(log_file.read_text(encoding="utf-8-sig"))
+    if not rows:
+        print(f"[FAIL] {rel}/log.md has no file map row (| file | action | purpose |)", flush=True)
+        return False
+
+    missing: list[str] = []
+    for path, _rest in rows:
+        norm = path.replace("\\", "/").strip()
+        if not norm or "待建" in norm:
+            continue
+        if not (ROOT / norm).exists():
+            missing.append(norm)
+    if missing:
+        print(f"[FAIL] {rel}/log.md lists {len(missing)} path(s) that do not exist:", flush=True)
+        for path in missing[:10]:
+            print(f"  - {path}", flush=True)
+        print("      fix the path, or mark it as (待建).", flush=True)
+        ok = False
+
+    if ok:
+        print(f"[ok] {rel}: spec.md + log.md, {len(rows)} file row(s)", flush=True)
+    return ok
+
+
+def check_progress() -> bool:
+    path = ROOT / "PROGRESS.md"
+    if not path.is_file():
+        print("[FAIL] PROGRESS.md not found", flush=True)
+        return False
+    lines = path.read_text(encoding="utf-8-sig").splitlines()
+    if len(lines) > PROGRESS_MAX_LINES:
+        print(f"[FAIL] PROGRESS.md is {len(lines)} lines (limit {PROGRESS_MAX_LINES})", flush=True)
+        print("      it records state, not history; past work belongs to git log.", flush=True)
+        return False
+    print(f"[ok] PROGRESS.md {len(lines)}/{PROGRESS_MAX_LINES} lines", flush=True)
+    return True
+
+
+def check_troubleshooting() -> bool:
+    path = ROOT / "TROUBLESHOOTING.md"
+    if not path.is_file():
+        print("[FAIL] TROUBLESHOOTING.md not found", flush=True)
+        return False
+    sections = parse_sections(path.read_text(encoding="utf-8-sig"))
+    bad = [title for title, body in sections if "**原因**" not in body or "**解决**" not in body]
+    if bad:
+        print(f"[FAIL] {len(bad)} TROUBLESHOOTING section(s) lack **原因** or **解决**:", flush=True)
+        for title in bad[:5]:
+            print(f"  - {title}", flush=True)
+        return False
+    print(f"[ok] TROUBLESHOOTING.md {len(sections)} section(s) well formed", flush=True)
+    return True
+
+
+def check_spec() -> bool:
+    print("\n=== guard: spec ===", flush=True)
+    ok = True
+    try:
+        task_dir = current_task_dir()
+    except RuntimeError as exc:
+        print(f"[FAIL] {exc}", flush=True)
+        return False
+
+    if task_dir is None:
+        print("[skip] specs/CURRENT points to no task card", flush=True)
+    else:
+        ok = check_task_card(task_dir) and ok
+
+    ok = check_progress() and ok
+    ok = check_troubleshooting() and ok
+    return ok
+
+
 def check_scope(base: str | None) -> bool:
     print("\n=== guard: scope ===", flush=True)
     try:
@@ -237,7 +369,7 @@ def check_forbidden() -> bool:
 
 def main(argv: list[str]) -> int:
     use_utf8_stdout()
-    known = {"all", "scope", "forbidden"}
+    known = {"all", "spec", "scope", "forbidden"}
     command = argv[0] if argv and not argv[0].startswith("-") else "all"
     if command not in known:
         print(f"unknown command: {command} (use: {', '.join(sorted(known))})", flush=True)
@@ -252,6 +384,8 @@ def main(argv: list[str]) -> int:
         base = argv[idx + 1]
 
     ok = True
+    if command in {"all", "spec"}:
+        ok = check_spec() and ok
     if command in {"all", "scope"}:
         ok = check_scope(base) and ok
     if command in {"all", "forbidden"}:
