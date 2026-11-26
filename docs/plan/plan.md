@@ -1,194 +1,194 @@
 # 总计划
 
-> 状态：v1 · 2026-11-25。本文件只回答「做什么、为什么这么切、按什么顺序」。
-> 单卡细节在 `specs/NNN-*/spec.md`；前端三个前置产物在 `docs/plan/frontend-plan.md`；
-> 已拍板的决策在 `docs/plan/decision-log.md`。
-> **改计划只改本文件**。要改某张卡的范围，改那张卡的 `spec.md`，不改这里。
+> 状态：v3 · 2026-11-26。本文件只回答「做什么、为什么这么切、按什么顺序」。
+> 单卡细节在 `specs/NNN-*/spec.md`；前端 IA / 线框 / tokens 在 `docs/plan/frontend-plan.md`；
+> 决策理由在 `docs/plan/decision-log.md`。
+> 计划变更改本文件；决策理由改 decision-log.md；单卡范围改该卡 spec.md。本文件上限 200 行。
 
-## 0. 上一版（项目3 · CC-Roster）错在哪
+## 0. 这一版为什么重写
 
-| 症状 | 根因 | 这一版怎么处理 |
+| 上一版的假设 | 实际情况 | v3 怎么改 |
 |---|---|---|
-| 114 张卡、做完不敢说完成 | 卡片按功能纵向切，每卡粒度过大，验收靠人眼 | 横切排卡，每卡一个可观察产出，`check.py` 退出码 0 是唯一完成信号 |
-| app 内自建「主数据」（供应商绑定、快照、防漂移） | 设计成「配置的中央管理者」 | 改成「配置的读写器」：工具自己的文件是唯一真相源，app 只存预设 |
-| 设计稿与代码脱节 | Penpot 导出 PNG，再到代码是第三次翻译 | 代码即设计稿：IA → 线框 → tokens → 组件，一份文件一条链 |
-| 单卡 token 越用越多 | 一卡一会话的上下文累积 + scope 写宽目录 | 一卡一会话；scope 写具体文件路径；`log.md` 文件地图 |
-| 计划文档本身膨胀到 696 行 | 把 P2 方向、未来设想都写进总计划 | 本文件上限 200 行；未拍板的事进第 12 节，不开卡 |
+| 主线是「配置管理器」：读配置、预设、切换、回滚 | CC Switch v4.0.42 已做字段级安全写入、原子写、备份、Session Manager；再做一遍是红海 | 配置只读；不写工具原生配置；改为「本机开发环境驾驶舱」 |
+| 对话是配置面板的附属功能 | 用户要的是 VS Code 里 Claude Code 插件式的 CLI 对话；API 聊天等于重写 agent loop | CLI 优先；Claude Code 作为第一个运行时；exe 只打包 UI |
+| 朋友会自己装 Node/Claude、自己配 key | 朋友不是开发者；没有 Claude 账号；国产模型更现实 | 全局 Node + 全局 Claude + 一键安装 + 国产 Anthropic 兼容 provider + Doctor |
+| 危险操作可以在 app 里做 | 删环境变量、杀进程、卸载包都可能弄坏机器；没有回收站 | v1 只读；危险操作给 Windows 原生入口 + 文档；v1.1 再评估 |
+| 19 卡 / 18.25 人日 | 范围已换，旧卡表失效 | 重切 10 卡 / 约 12.5 人日；v1.1 backlog 单列 |
 
 ## 1. 一句话产品
 
-打开面板，看到本机每个 AI 编程工具**当前用的是哪个供应商 / 模型**；没配置的可一键生成最小配置；
-要换时选预设、看 diff、确认写入、失败可回滚。另外同一个面板里能跟这些工具**对话**，并回放历史会话。
+打开一个本地面板，先看清这台机器上的开发环境：Node / Claude Code 能不能用、AI CLI 接的是哪个模型、
+环境变量 / 进程 / 端口 / 全局包是什么状态；再一键运行常用命令，或直接跟 Claude Code 对话。
 
-## 2. 三条策略
+## 2. 用户与场景
 
-| 策略 | 含义 | 由此砍掉的东西 |
+| 用户 | 场景 | v1 要给什么 |
 |---|---|---|
-| 配置优先读本地 | 工具自己的配置文件是唯一真相源；app 只读，只在用户确认后增量写 | app 内的 provider 主数据、绑定矩阵、快照、防漂移、冲突重检 |
-| 一工具一模型 | 每个工具同一时刻只有一个生效的 provider + model | 多供应商绑定、切换矩阵 |
-| 配置简洁 | app 自身只有一个人类可读的 `config.yaml`（预设 + 设置） | 数据库、迁移、索引重建 |
+| 我自己 | 每天开工前确认环境；改完 PATH 想知道有没有生效；不想记长命令 | 总览 + 环境变量只读 + Provider Doctor + 对话 |
+| 朋友（非开发者） | 拿到一个 exe/setup，按向导装好，填国产模型 key，直接聊天 | Setup 向导 + Doctor 绿灯 + 示例仓库 + 5 分钟剧本 |
+| 未来的我 | 加进程/端口/全局包/新 provider，不改核心 | ModuleSpec / ModuleDef / CommandSpec 扩展点 |
 
-## 3. 功能清单（覆盖矩阵的行锚，编号不复用）
+目标不是做长期产品，是「能自用、能演示、能扩展」。不追求日活、不追求多平台。
+
+## 3. 六条策略
+
+| 策略 | 含义 | 由此砍掉 |
+|---|---|---|
+| 只读优先 | v1 只看不做；删除/杀进程/卸载只给系统原生入口 + 文档 | app 内注册表写入、进程 kill、包卸载 |
+| 全局运行时 | 用全局 Node + 全局 Claude Code；不做私有 runtime | 便携 Node、内置 CLI、运行时版本管理 |
+| 不写工具配置 | 不碰 `~/.claude/settings.json` / `~/.codex/config.toml`；provider 只对子进程生效 | 预设 CRUD、diff、备份、原子写、回滚、冲突检测 |
+| CLI 优先 | 聊天走 `claude -p --output-format stream-json`；不做 API chat | 自建 agent loop、工具协议、权限系统 |
+| 模块化 | 后端 ModuleSpec/Module，前端 ModuleDef；CommandSpec 白名单 + danger | 单体大页面、功能之间直接 import |
+| 可演示 | 5 分钟剧本；Doctor 绿灯；示例仓库；两台机器手动验收 | 只在自己机器上能跑的「作品」 |
+
+## 4. 功能清单（编号不复用）
 
 | 编号 | 功能 | 优先级 |
 |---|---|---|
-| F-01 | 发现本机已安装的工具，列出安装状态 | P0 |
-| F-02 | 读取工具的当前配置，显示 provider / model / base_url / 密钥引用 | P0 |
-| F-03 | 未配置引导：预览后生成最小配置，不静默写 | P0 |
-| F-04 | 预设的增删改查 | P0 |
-| F-05 | 单工具切换：选预设 → diff → 确认 → 原子写 → 可回滚 | P0 |
-| F-06 | 工具列表页：一眼看完所有工具状态 | P0 |
-| F-07 | 工具详情页：当前配置 + 切换入口 | P0 |
-| F-08 | 对话：选工具 + 目录 → 发消息 → 流式回复 | P0 |
-| F-09 | 对话上下文条：显示当前工具 / 模型 / 目录 | P0 |
-| F-10 | 过程折叠：工具调用折叠成单行，可展开 | P1 |
-| F-11 | 停止 / 重试 | P1 |
-| F-12 | 本地会话历史（L3）：回放本软件内产生的对话 | P0 |
-| F-13 | 原生历史（L2）：读工具自己写的会话文件，只读回放 | P1 |
-| F-14 | `/styleguide` 设计系统自检页 | P1 |
+| F-01 | 工具链检测：Node / npm / Claude Code 的安装状态、版本、路径 | P0 |
+| F-02 | Provider Registry：国产 Anthropic 兼容 provider + 自定义 | P0 |
+| F-03 | Doctor：对话 / 流式 / tool use / 长上下文四项探测 | P0 |
+| F-04 | CLI 对话：选 provider + 目录 → 流式回复、tool cards、停止/重试 | P0 |
+| F-05 | L3 会话历史：本软件会话落盘 + 回放 | P0 |
+| F-06 | 环境变量只读：User/Machine、搜索、PATH chips、密钥打码、复制/导出 | P0 |
+| F-07 | 打开 Windows 环境变量对话框 + 修改教程 | P0 |
+| F-08 | 模块壳 + 总览页 + `/styleguide` | P0 |
+| F-09 | 一键安装：全局 Node + 全局 Claude Code + provider 配置 + Doctor | P0 |
+| F-10 | exe + Setup 向导 + 5 分钟演示剧本 | P0 |
+| F-11 | 进程 / 端口只读 | P1（v1.1） |
+| F-12 | 全局 npm / pip 包只读 | P1（v1.1） |
+| F-13 | 命令面板：白名单命令一键执行 | P1（v1.1） |
+| F-14 | 工具原生配置只读（Claude / Codex） | P2（v1.1） |
+| F-15 | 编辑/审批：Agent SDK `can_use_tool` | P2（v1.1） |
+| F-16 | 更多 provider / 多工具对话 | P2（v1.2） |
 
-非功能约束：N-1 仅要求 Windows 可用（macOS / Linux 尽力）；N-2 无数据库；N-3 不存明文密钥，只存引用；
-N-4 单进程本地服务，不鉴权、不对外暴露端口。
+非功能约束：N-1 仅 Windows；N-2 无数据库；N-3 不在仓库/日志里存明文 key；N-4 只绑定 localhost，不对外。
 
-## 4. 范围
+## 5. 范围
 
-**做（v1）**：F-01～F-14，四个工具中 Claude Code 与 Codex CLI 可写，Gemini CLI / OpenCode 只读。
+**v1 做**：F-01～F-10。一个 Claude Code runtime；Anthropic 兼容 provider；环境变量只读；全局 Node/Claude；exe + Setup；L3 历史。
 
-**不做（v1）**：app 内数据库；多工具同时切换 / 批量操作；明文密钥入库；resume 回工具里继续；
-e2e 自动化（手动验收 + 截图存档）；打包成安装包。
+**v1.1 做**：F-11～F-15。进程/端口/全局包只读、命令面板、工具配置只读、Agent SDK 编辑审批。
 
-## 5. 领域模型与命名
+**v1.2 做**：F-16，以及杀进程/卸载包/环境变量删除的安全操作；先有备份/撤销/审计再开。
 
-    Tool    : id, name, config_path, install(status), config(status), current{provider, model, base_url, key_ref}
-    Preset  : id, name, provider, base_url, model, key_ref
-    Settings: theme, last_tool, last_project
+**v1 不做**：写工具原生配置；预设 CRUD/切换/回滚；L2 原生历史；Gemini/OpenCode；API chat；私有 Node runtime；多工具同时对话。
 
-app 只把 `Preset` + `Settings` 存进 `config.yaml`；`Tool` 每次从磁盘现读，不落库。
+## 6. 领域模型与命名
 
-**命名先定死，不许漂移**（旧项目最大返工来源）：
+    Toolchain : node, npm, claude; status, version, path
+    Provider  : id, name, protocol=anthropic, base_url, model, key_ref, auth_style, docs_url
+    Doctor    : provider_id, checks[{name,status,detail,latency_ms}], overall
+    Chat      : id, provider_id, cwd, cli_session_id, status, messages
+    EnvVar    : name, value_masked, scope(user|machine), kind, is_secret
+    Module    : id, title, route, commands[], status
+    Command   : id, argv[], danger(safe|caution|danger), timeout, cwd_policy
+
+命名先定死：
 
 | 词 | 只指 | 不指 |
 |---|---|---|
-| Tool | 一个被管理的 AI 编程 CLI（Claude Code 等） | 工具里调的某个函数 |
-| Provider | 提供 API 的中转站或官方（myapi、anthropic） | 模型厂商的抽象层 |
-| Preset | app 存的一组 provider + model + base_url + 密钥引用 | 工具文件里的现状 |
-| 当前配置（current） | 从工具配置文件里读出来的、此刻真实生效的值 | 用户想切成的目标值 |
-| 候选（candidate） | 用户选中、准备写入的 Preset | — |
+| Provider | 一个 Anthropic 兼容 API 端点 + key 引用 + model | 工具厂商 / 模型厂商抽象层 |
+| Toolchain | 全局 Node / npm / Claude Code | app 自带运行时 |
+| Doctor | 对 provider 做兼容性探测 | 安装器 |
+| Module | 一个可独立开关的功能单元 | Python module |
+| Command | 白名单里的一个可执行动作 | 任意 shell 字符串 |
+| Preset | **v1 不再使用**；旧计划的概念 | 现在的 Provider |
 
-## 6. 状态矩阵
+## 7. 状态矩阵
 
-这一张表同时是 003（配置格式设计）和 004（IA 状态设计）的输入。**不许在组件里临时加状态。**
+| 对象 | 状态 | UI | 下一步 |
+|---|---|---|---|
+| Toolchain | Node 缺失 / 过旧 / 正常 | 红 / 黄 / 绿 | 安装 / 升级 / 继续 |
+| Toolchain | Claude 缺失 / 版本不兼容 / 正常 | 红 / 黄 / 绿 | 安装 / 升级 / 继续 |
+| Provider | 未配置 / 未测试 / 测试中 / 通过 / 失败 | 灰 / 黄 / 蓝 / 绿 / 红 | 添加 / 测试 / 进 chat |
+| Chat | 无 provider / 无目录 / 空闲 / 流式 / 退出 / 异常 | 禁用 / 禁用 / 可用 / 停止 / 可重试 / 红条 | 选 provider / 选目录 / 发送 |
+| Env | 加载 / 空 / 错误 | 骨架 / 说明 / 红条 | 重试 / 打开系统对话框 |
+| Env 打开对话框 | 成功 / 失败 | 提示 / 回退教程 | — |
 
-| 工具状态 | 判定 | 列表页 | 能否进详情 | 能否写入 |
-|---|---|---|---|---|
-| 未安装 | 找不到可执行文件 | 灰掉 +「未检测到」 | 能（显示安装说明） | 不能 |
-| 已安装·配置文件不存在 | 路径不存在 | 「未配置」 | 能 | 能，但必须先预览 |
-| 已安装·解析失败 | 存在但 JSON / TOML 非法 | 红点 +「配置有误」+ 首行错误 | 能 | **不能** |
-| 已安装·缺必填字段 | 解析成功、缺 model / provider | 「未配置」 | 能 | 能，但必须先 diff |
-| 正常 | 三项齐全 | `Claude · myapi · sonnet-4` | 能 | 能 |
+## 8. 前端策略
 
-## 7. 前端策略：代码即设计稿
+不引组件库；IA → 线框 → tokens → 组件，全部在 `docs/plan/frontend-plan.md`。
+v1 六个路由：`/` 总览、`/providers` 模型接入、`/chat` 对话、`/history` 历史、`/env` 环境变量、`/styleguide`。
+`/system`（进程/端口/包）是 v1.1 预留，不进 v1 导航。
+每张前端卡用 Playwright 截图存 `docs/design/shots/NNN-*.png`；`/styleguide` 是活规范。
 
-不引入组件库，不用设计工具导图。三个前置产物按顺序出，全部落在 `docs/plan/frontend-plan.md`：
+## 9. 里程碑与任务卡
 
-1. **IA**：页面清单 + 路由 + 每页要人完成的动作 + 状态矩阵（对应第 6 节）
-2. **线框**：每页 ASCII 图，先定布局再定样式
-3. **tokens**：`src/styles/tokens.css` 定义间距刻度 / 字号阶梯 / 语义色 / 圆角；组件里禁止裸数值
-
-验收方式：每张前端卡结束用 Playwright 截图存 `docs/design/shots/NNN-*.png`，看截图给修改点。
-`/styleguide` 是活的设计规范，改 tokens 只改一个文件。
-
-## 8. 里程碑与任务卡
-
-已完成：**001 骨架**（health + 首页 + `check.py` + CI + 流程 v2）。
+已完成：**001 骨架**。
 
 | 编号 | 卡名 | 产出 / DoD | 依赖 | 预估 |
 |---|---|---|---|---|
-| **M0 决策** | | | | |
-| 002 | 产品定义与领域模型 | `decision-log.md` 记 ADR-002～；第 5 节命名与第 6 节状态矩阵定稿 | 001 | 0.5d |
-| 003 | 配置文件格式与写入安全 | `config.yaml` schema；diff / 备份 / 原子写 / 回滚流程写死并有测试 | 002 | 0.5d |
-| 004 | 前端 IA + 线框 + tokens | `frontend-plan.md` 三章成稿；`tokens.css`；`/styleguide` 骨架 | 002 | 1d |
-| **M1 只读** | | | | |
-| 005 | 工具发现与注册表 | 统一 `ToolStatus`、registry、错误归一；新增一个工具只加一个文件 | 003 | 1d |
-| 006 | Claude Code 读取 | `settings.json` 解析 + 测试 | 005 | 0.75d |
-| 007 | 其余三家读取 | Codex `config.toml`+`auth.json`、Gemini、OpenCode 解析 + 测试 | 005 | 1.5d |
-| **M2 写入** | | | | |
-| 008 | 预设存储 | `config.yaml` 读写 + 校验 + 测试 | 003 | 1d |
-| 009 | 单工具切换写入 | diff 预览 / 备份 / 原子写 / 回滚 + API + 测试 | 006、008 | 1.5d |
-| **M3 前端** | | | | |
-| 010 | 壳 + 工具列表页 | 4 个工具与各自状态正确显示 | 004、005 | 1d |
-| 011 | 工具详情 + 切换 | 选预设 → diff → 确认 → 结果可回滚 | 009、010 | 1d |
-| 012 | 预设管理页 | 预设增删改查 | 008、010 | 1d |
-| **M4 对话** | | | | |
-| 013 | 对话 spike（先真跑再定契约） | 用真实 CLI 跑通一次流式输出，产出事件格式记录 | 005 | 1d |
-| 014 | 后端运行时（Claude） | 子进程 + 进程树终止 + SSE + 测试（用假 CLI） | 013 | 1.5d |
-| 015 | Codex 接入 | 第二个运行时适配器，不改 014 的文件 | 014 | 1d |
-| 016 | 前端对话页 | 消息流 + 上下文条 + 过程折叠 + 停止 | 014 | 1.5d |
-| 017 | 本地历史 L3 | 本软件内会话落盘 + 历史页回放 | 016 | 1d |
-| 018 | 原生历史 L2 | 读 Claude / Codex 原生会话，只读回放，读不到显示未知项目 | 017 | 1.5d |
-| **M5 收口** | | | | |
-| 019 | 手动 E2E + 启动脚本 + README | 两个工具各走一遍真实切换与对话；文档可交接 | 011、012、018 | 1d |
+| **M0 验证** | | | | |
+| 002 | CLI + 国产模型 spike | 干净 Windows：全局 Node + 全局 Claude + Anthropic 兼容端点（Node/Claude 可手工装，003 再自动化）；无 Claude 登录；stream-json 事件、tool use、resume、取消、中文编码；产出 `docs/spikes/chat-runtime.md` | 001 | 1.5d |
+| **M1 环境与接入** | | | | |
+| 003 | 工具链检测 + 一键安装 | Node/npm/Claude 检测；`install.bat` 全局安装 Node + Claude；版本/路径/错误归一；假 PATH 测试 | 001 | 1.5d |
+| 004 | Provider Registry + Doctor | `provider.yaml` schema；对话/流式/tool use/长上下文测试；API + 页面；失败可读 | 002 | 1.5d |
+| 005 | 环境变量只读 + 原生入口 | User/Machine 列表、PATH chips、密钥打码、复制/导出；`open-editor` 调 `rundll32`；教程 | 001 | 1d |
+| 006 | 模块壳 + 总览 | ModuleSpec/ModuleDef；顶栏；总览卡；`/styleguide` 骨架 | 004、005 | 1d |
+| **M2 对话** | | | | |
+| 007 | CLI chat 后端 A | spawn Claude、stream-json 解析、事件归一、假 CLI 测试 | 002、004 | 1.5d |
+| 008 | CLI chat 后端 B | SSE、取消/进程树终止、超时、错误归一 | 007 | 1.5d |
+| 009 | Chat 前端 | 消息流、tool cards、上下文条、停止/重试、空/错状态 | 008 | 1.5d |
+| 010 | L3 历史 | 会话落盘 + 历史页回放 | 009 | 1d |
+| **M3 收口** | | | | |
+| 011 | exe + Setup + 手动 E2E | PyInstaller、setup 向导、README、5 分钟剧本；两台机器验收 | 003、006、010 | 1d |
 
-合计约 **18.25 人日**。每张卡 ≤ 1.5 天，超过就拆卡。
+合计约 **12.5 人日**（±2）。每张卡 ≤ 1.5 天；超了就拆。
 
-## 9. 需求覆盖矩阵
+## 10. 需求覆盖矩阵
 
 | 功能 | 落点卡 | 可观察的验收锚点 |
 |---|---|---|
-| F-01 | 005 | 测试里删掉工具的假路径后，列表显示「未安装」而不是报错 |
-| F-02 | 005、006、007 | 给定一份真实配置样本，接口返回 provider / model / base_url 三项 |
-| F-03 | 009 | 文件不存在时接口返回「预览」，磁盘在确认前不变（测试断言 mtime 未变） |
-| F-04 | 008、012 | 加一个预设、重启服务、预设还在 |
-| F-05 | 009、011 | 切换后文件内容等于候选值；回滚后字节级等于切换前 |
-| F-06 | 010 | 四种状态各有一个工具，同屏能区分 |
-| F-07 | 011 | 详情页显示的 current 与磁盘文件一致 |
-| F-08 | 013、014、016 | 发一句话，字符逐段出现，不是一次性吐出 |
-| F-09 | 016 | 切换工具后上下文条的模型名跟着变 |
-| F-10 | 016 | 一次工具调用只占一行，点击展开 |
-| F-11 | 016 | 停止后进程真的没了（`tasklist` 里查不到子进程） |
-| F-12 | 017 | 重开 app，历史页能看到上次会话并回放 |
-| F-13 | 018 | 读得到就显示原生会话；读不到显示「未知项目」而不是崩 |
-| F-14 | 004 | `/styleguide` 能看到所有 tokens 的实体 |
+| F-01 | 003 | 删掉假 PATH 后总览显示「未安装 Node」，不是报错 |
+| F-02 | 004 | 加一个 provider，重启后还在；key 不以明文回显 |
+| F-03 | 004 | 四项探测各有 pass/fail；失败显示具体检查项 |
+| F-04 | 007、008、009 | 发一句话，字符逐段出现；停止后进程树里查不到子进程 |
+| F-05 | 010 | 重开 app，历史页能看到上次会话并回放 |
+| F-06 | 005 | User/Machine 两个 scope 正确；密钥默认打码；PATH 拆成条目 |
+| F-07 | 005 | 点按钮打开 Windows 环境变量对话框；失败回退教程 |
+| F-08 | 006 | 六个路由可达；`/styleguide` 显示所有 tokens |
+| F-09 | 003、004、011 | 干净 Windows 上双击 setup，Doctor 绿灯 |
+| F-10 | 011 | 朋友按剧本 5 分钟跑通一次对话 |
 
-## 10. 依赖顺序
+## 11. 依赖顺序
 
 ```text
-002 → 003 → 005 → {006, 007}
-002 → 004 → 010
-003 → 008 → 009
-006 → 009 → 011 → 012
-005 → 013 → 014 → {015, 016}
-016 → 017 → 018
-{011, 012, 018} → 019
+001 → 002 → 004 → {006, 007}
+001 → 003 → 011
+001 → 005 → 006
+007 → 008 → 009 → 010
+{003, 006, 010} → 011
 ```
 
-关键路径：002 → 003 → 005 → 006 → 009 → 011 → 019。
+关键路径：002 → 004 → 007 → 008 → 009 → 010 → 011。
 
-## 11. 每张卡的节奏（防走偏机制）
+## 12. 每张卡的节奏
 
-1. **开工前**：把 `spec.md` 的 scope + DoD 写成 5 行摘要发给你，你点头才开工。
-2. **做完**：贴 `uv run python scripts/check.py` 完整输出 + 「这张卡你应该能解释的 3 个问题」。
-3. **你过了才提交**：一张卡一个 commit，`specs/CURRENT` 同步更新。
-4. 卡内 30 分钟搞不定就停，按 `AGENTS.md` 第 6 条写 `PROGRESS.md`「未决问题」。
+1. 开工前：把 `spec.md` 的 scope + DoD 写成 5 行摘要发给你，你点头才开工。
+2. 做完：贴 `uv run python scripts/check.py` 完整输出 + 「这张卡你应该能解释的 3 个问题」。
+3. 你过了才提交：一张卡一个 commit，`specs/CURRENT` 同步更新。
+4. 30 分钟搞不定就停，按 `AGENTS.md` 第 6 条写 `PROGRESS.md`「未决问题」。
 
-## 12. 待拍板（默认值已按下表执行，改一条就改卡数）
+## 13. 待拍板
 
 | 编号 | 问题 | 默认 | 改动影响 |
 |---|---|---|---|
-| D-1 | v1 是否包含对话工作台 | **做**（M4 六张卡） | 不做则 -6 卡、-7 人日 |
-| D-2 | 可写工具范围 | 只写 Claude Code / Codex | 全写则 +2 卡 |
-| D-3 | 密钥怎么存 | 只存引用（env 名 / 工具 auth 文件） | 存明文则要加加密与脱敏卡 |
-| D-4 | 预设存哪 | app 的 `config.yaml` | 存工具目录则每种工具一套 |
-| D-5 | 是否支持从工具配置反导入预设 | 支持 | 不做则 011 少一个入口 |
-| D-6 | UI 语言 | 中文 | — |
-| D-7 | 是否引入 Playwright | 引入（仅截图，不做 e2e 断言） | 不引入则前端验收退回人眼 |
+| D-1 | 第一家国产 Anthropic 兼容 provider | 先选一家明确支持 Messages API 的 | 不支持则加 LiteLLM，+2 卡 |
+| D-2 | v1 做只读 plan 还是可编辑 | 只读 plan | 可编辑走 Agent SDK，+2 卡 |
+| D-3 | key 存哪 | app 的 `config.yaml` 只存引用；明文只在本机 settings，不进 git | 存明文要加加密/脱敏卡 |
+| D-4 | exe 打包工具 | PyInstaller | 换 Tauri/Electron 则前端重做 |
+| D-5 | 进程/端口/包/命令面板 | v1.1 | 提前则 +4 卡 / +4 人日 |
+| D-6 | L2 原生历史 | 不做 | 做则 +1.5 卡 |
+| D-7 | UI 语言 | 中文 | — |
 
-## 13. 风险与对策
+## 14. 风险与对策
 
 | 风险 | 对策 |
 |---|---|
-| 四家配置格式差异大，parser 互相污染 | 005 的注册表隔离，每家一个文件，失败只影响自己 |
-| 写配置是危险操作 | 009 强制「先备份、再 diff、再原子写」；解析失败一律拒写 |
-| 接别人的 CLI 比预想难（事件格式、进程树、编码） | 013 先 spike 真跑，再定 014 的契约；不先造假的 executor |
-| 前端返工 | 004 先把 IA / 线框 / tokens 定死；一张卡只做一个页面；验收必须看截图 |
-| 计划再次膨胀 | 新需求先进第 12 节，不直接开卡；本文件超 200 行就说明该砍 |
+| 国产 provider 的「兼容」只兼容普通对话，tool use 不可用 | 002 先测；Doctor 四项分级；tool use 失败降级为只读聊天 |
+| Claude Code 对第三方端点仍要登录/onboarding | 002 在干净 Windows 验证；不行换 Codex CLI + OpenAI 兼容端点 |
+| 全局 Node 版本冲突 / PATH 污染 | 003 只检测不静默升级；环境变量页展示 PATH；文档写清 |
+| `.cmd` shim、进程树、UTF-8 | 007/008 用 `cmd /c` + psutil 进程树 + 显式 encoding；假 CLI 测试 |
+| exe 打包后路径/参数变化 | 011 用打包产物跑 5 分钟剧本，不用开发模式验收 |
+| 计划再次膨胀 | 新需求先进第 13 节；本文件超 200 行就砍 |
