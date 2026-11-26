@@ -5,9 +5,11 @@
 ## 写测试的顺序
 1. 先写下失败用例（描述期望行为），确认它**因为功能没写而失败**，不是因为 import 错误。
 2. 再改实现，把它跑绿。
-3. 最后跑 `uv run python scripts/check.py`。它输出 9 段，全部通过才算完成：
-   2 道 guard（scope / forbidden）+ 后端 4 道（lint / format / types / tests）
-   + 前端 3 道（types / lint / tests）。
+3. 最后跑 `uv run python scripts/check.py`，全部段落通过才算完成。顺次是：
+   3 道 guard（spec / scope / forbidden）→ `file map` 重建 → 后端 4 道
+   （lint / format / types / tests）→ 前端 3 道（types / lint / tests）。
+   `guard spec` 会拦：任务卡缺 `log.md`、残留 `tasks.md`、`log.md` 文件表为空或路径不存在、
+   `PROGRESS.md` 超过 60 行、`TROUBLESHOOTING.md` 某条缺「原因」或「解决」。
 
 ## 只测行为，不测实现
 - 断言用户/调用方能观察到的结果：HTTP 状态码、响应体字段、渲染出来的文本。

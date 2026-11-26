@@ -24,8 +24,12 @@ def run(name: str, args: list[str], cwd: Path) -> None:
 def main() -> None:
     # 硬门禁先行：越界改动 / 禁用写法都是秒级检查，不必等两套测试跑完才发现
     guards = str(ROOT / "scripts" / "guards.py")
+    # 结构门禁：任务卡三件套、PROGRESS 行数、TROUBLESHOOTING 格式
+    run("guard spec", [sys.executable, guards, "spec"], ROOT)
     run("guard scope", [sys.executable, guards, "scope"], ROOT)
     run("guard forbidden", [sys.executable, guards, "forbidden"], ROOT)
+    # 每次验收重建文件地图，保证它不会过期
+    run("file map", [sys.executable, str(ROOT / "scripts" / "map.py")], ROOT)
 
     run("backend lint", ["uv", "run", "ruff", "check", "."], BACKEND)
     run("backend format", ["uv", "run", "ruff", "format", "--check", "."], BACKEND)
